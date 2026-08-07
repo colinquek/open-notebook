@@ -29,6 +29,8 @@ Open Notebook is an open-source, privacy-focused alternative to Google's Noteboo
 - Credential management and model discovery
 
 ## Files Changed for SSL Fix (2026-08-07)
+
+### Phase 1: Python Code Changes (Already in sslfix branch)
 The following files were modified to support `ESPERANTO_SSL_VERIFY` environment variable:
 
 1. `open_notebook/ai/connection_tester.py` - Added `_get_ssl_verify_setting()` function
@@ -38,10 +40,18 @@ The following files were modified to support `ESPERANTO_SSL_VERIFY` environment 
 
 All `httpx.AsyncClient` instantiations (19 total) now pass `verify=_get_ssl_verify_setting()` parameter.
 
-## Docker Build Issue
-Frontend build fails on `npm ci` with "Exit handler never called!" error. This is a known npm bug that persists through 5 retry attempts. Backend-only builds work successfully.
+### Phase 2: Docker Build Fixes (2026-08-07 Session 2)
+After reclone, Docker build issues were resolved:
 
-## Next Steps
-- User will reclone from remote and reapply SSL fix changes
-- Need to resolve Docker frontend build issue
-- Test Groq connectivity with SSL verification disabled
+1. **Dockerfile** - Added npm cache clean and SSL disable:
+   - `RUN npm cache clean --force || true`
+   - `RUN npm config set strict-ssl false`
+
+2. **docker-compose.sslfix.yml** - Updated configuration:
+   - Changed from remote image to local build
+   - Added `ESPERANTO_SSL_VERIFY=false` environment variable
+
+## Test Results
+✅ Groq connection test successful with `ESPERANTO_SSL_VERIFY=false`
+✅ No SSL errors in container logs
+✅ Docker build completes successfully

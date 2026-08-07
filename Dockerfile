@@ -17,6 +17,9 @@ RUN npm config set registry ${NPM_REGISTRY} \
  && npm config set fetch-retry-maxtimeout 120000
 # Retry npm ci to survive transient registry ECONNRESETs, which are common on
 # the QEMU-emulated arm64 leg of the multi-arch build.
+# Clear cache first to avoid "Exit handler never called!" npm bug
+RUN npm cache clean --force || true
+RUN npm config set strict-ssl false
 RUN i=0; until npm ci; do \
       i=$((i+1)); \
       if [ "$i" -ge 5 ]; then echo "npm ci failed after $i attempts"; exit 1; fi; \

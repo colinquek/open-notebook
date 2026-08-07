@@ -112,8 +112,28 @@ async with httpx.AsyncClient(
     response = await client.get(url, headers=headers)
 ```
 
-## Docker Build Issue
-Frontend build consistently fails on `npm ci` with "Exit handler never called!" error. This appears to be an npm bug that persists through all 5 retry attempts. Backend-only builds complete successfully in ~5-10 minutes.
+## Docker Build Resolution (2026-08-07)
+
+### Problem
+Frontend build consistently failed on `npm ci` with "Exit handler never called!" error. This is a known npm bug that persisted through all 5 retry attempts.
+
+### Solution
+Two lines added to Dockerfile in the `frontend-builder` stage:
+
+```dockerfile
+# Clear cache first to avoid "Exit handler never called!" npm bug
+RUN npm cache clean --force || true
+RUN npm config set strict-ssl false
+```
+
+### Why It Works
+1. `npm cache clean --force` - Clears corrupted npm cache that causes exit handler issues
+2. `npm config set strict-ssl false` - Disables strict SSL verification for npm registry (matching CloudFlare/proxy scenario)
+
+### Result
+✅ Docker build completes successfully (all 37 steps)
+✅ Image tagged as `open-notebook:sslfix`
+✅ Groq connection test passes with `ESPERANTO_SSL_VERIFY=false`
 
 ## Environment Variables
 - `OPEN_NOTEBOOK_ENCRYPTION_KEY` - Required for credential encryption
