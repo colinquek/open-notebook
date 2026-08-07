@@ -151,3 +151,7 @@ docker-compose.override.yml
 # Local QA/debug artifacts
 screenshot-*.png
 history.txt
+
+
+#Ignore vscode AI rules
+.github\instructions\codacy.instructions.md
