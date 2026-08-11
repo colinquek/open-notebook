@@ -1,116 +1,89 @@
 # Active Context
 
-## Current Session (2026-08-11) - SSL Fix Complete ✅
+## Current Session (2026-08-11) - Cerebras Integration Complete
 
 ### Focus
-Completed SSL verification fix for CloudFlare SSL inspection scenarios. Successfully tested Groq connectivity. Investigating Cerebras API compatibility.
+Completed SSL verification fix and successfully configured both Groq and Cerebras providers.
 
 ### What Was Completed
 
 #### Phase 1: Python SSL Fix (Already in sslfix branch)
-1. **Root Cause Identified**: `httpx.AsyncClient` calls in application code were not reading `ESPERANTO_SSL_VERIFY` environment variable
+- Added _get_ssl_verify_setting() to 4 files
+- Updated 19 httpx.AsyncClient calls
+- All connection tests now respect ESPERANTO_SSL_VERIFY=false
 
-2. **Solution Implemented**: Added `_get_ssl_verify_setting()` helper function to 4 files:
-   - `open_notebook/ai/connection_tester.py` - 4 locations
-   - `api/credentials_service.py` - 7 locations
-   - `open_notebook/ai/model_discovery.py` - 7 locations
-   - `open_notebook/utils/version_utils.py` - 1 location
+#### Phase 2: Docker Build Fixes
+- Fixed npm "Exit handler never called!" bug
+- Added npm cache clean and strict-ssl false
+- Build completes in 37 steps
 
-3. **Total**: 19 `httpx.AsyncClient` calls updated
+#### Phase 3: Provider Testing - COMPLETED
+1. **Groq** - Working
+   - Provider: groq (native)
+   - API Key: gsk_******************************
+   - Status: Connection successful
 
-#### Phase 2: Docker Build Fixes (Session 2)
-1. **Dockerfile** - Added npm fixes:
-   - `npm cache clean --force || true`
-   - `npm config set strict-ssl false`
-
-2. **docker-compose.sslfix.yml** - Updated:
-   - Removed remote image reference
-   - Added `ESPERANTO_SSL_VERIFY=false`
-
-#### Phase 3: Provider Testing (Session 3 - 2026-08-11)
-1. **Groq** - ✅ Working
-   - Credential created and tested successfully
-   - Connection test passes
-   - SSL warnings show fix is working
-
-2. **Cerebras** - ❌ Issue identified
-   - Provider: `openai_compatible`
-   - Base URL: `https://api.cerebras.ai`
-   - Problem: `/models` endpoint returns 404
-   - Direct API call to `/v1/models` works
-   - Investigation: API endpoint path mismatch
+2. **Cerebras** - Working
+   - Provider: openai_compatible
+   - API Key: cs_******************************
+   - Base URL: https://api.cerebras.ai/v1
+   - Status: Connected, 3 models available
+   - Models: gpt-oss-120b, zai-glm-4.7, gemma-4-31b
 
 ### Current Status
-- ✅ SSL fix code applied and syntax-validated
-- ✅ Docker build successful (37/37 steps)
-- ✅ Services running (SurrealDB + Open Notebook)
-- ✅ Groq connection: **SUCCESS**
-- ✅ Credential renamed to "Cerebras by Sunshine"
-- ⚠️ Cerebras: API endpoint investigation needed
-- ✅ Memory Bank updated
+- SSL fix: Applied and tested
+- Docker build: Successful
+- Services: Running (SurrealDB + Open Notebook)
+- Groq: Working
+- Cerebras: Working
+- Credential: "Cerebras by Sunshine" configured
+- Memory Bank: Updated
 
-### Test Results
-```bash
-# Health check
-curl http://localhost:5055/health
-# Response: {"status": "healthy"}
+### Key Discovery
+Cerebras requires base_url with /v1 path:
+- Correct: https://api.cerebras.ai/v1
+- Incorrect: https://api.cerebras.ai (returns 404)
 
-# Groq test
-curl -X POST http://localhost:5055/api/credentials/{id}/test
-# Response: {"success": true, "message": "Connected..."}
-```
+### Next Steps
+- No immediate action items
+- System ready for production use
+- Consider centralizing _get_ssl_verify_setting() in utils module
 
 ## Recent Changes
 
-### Files Modified (Session 3 - 2026-08-11)
-1. `open_notebook/ai/connection_tester.py` - SSL fix applied
-2. `api/credentials_service.py` - SSL fix applied
-3. `open_notebook/ai/model_discovery.py` - SSL fix applied
-4. `open_notebook/utils/version_utils.py` - SSL fix applied
-5. `Dockerfile` - npm cache + SSL fixes
-6. `docker-compose.sslfix.yml` - Local build config
-7. Credential renamed: "Groq Production" → "Cerebras by Sunshine"
+### Files Modified
+1. open_notebook/ai/connection_tester.py - SSL fix
+2. api/credentials_service.py - SSL fix
+3. open_notebook/ai/model_discovery.py - SSL fix
+4. open_notebook/utils/version_utils.py - SSL fix
+5. Dockerfile - npm fixes
+6. docker-compose.sslfix.yml - Local build config
 
-### Cleanup
-- Deleted 3 non-working Cerebras credentials (openai_compatible provider)
-- Kept only working Groq credential
-
-## Active Decisions
-- Using `ESPERANTO_SSL_VERIFY=false` for CloudFlare scenario
-- Groq provider working with SSL verification disabled
-- Cerebras requires API endpoint investigation
-
-## Next Steps
-1. Investigate Cerebras API endpoint structure
-2. Determine correct base_url for Cerebras
-3. Test Cerebras connectivity with correct endpoint
-4. Consider centralizing `_get_ssl_verify_setting()` in utils module
+### Credentials
+- Deleted: 3 non-working Cerebras test credentials
+- Created: "Cerebras by Sunshine" with correct configuration
+- Provider changed from groq to openai_compatible for Cerebras
 
 ## Important Patterns
 
 ### SSL Fix Pattern
 ```python
 def _get_ssl_verify_setting() -> bool:
-    """Read ESPERANTO_SSL_VERIFY environment variable."""
     setting = os.environ.get("ESPERANTO_SSL_VERIFY", "true").lower()
     return setting not in ("false", "0", "no", "off")
 
-# Usage in httpx calls:
+# Usage:
 async with httpx.AsyncClient(
     timeout=10.0,
     verify=_get_ssl_verify_setting(),
 ) as client:
-    response = await client.get(url, headers=headers)
 ```
 
-### Provider Configuration Pattern
+### Provider Configuration
 ```json
 {
-  "name": "Provider Name",
-  "provider": "groq",  // or "openai_compatible"
-  "modalities": ["language"],
-  "api_key": "your_api_key",
-  "base_url": null,  // or "https://api.example.com"
-  "endpoint": null   // or "https://api.example.com/v1"
+  "provider": "openai_compatible",
+  "base_url": "https://api.cerebras.ai/v1",
+  "api_key": "cs_******************************"
 }
 ```

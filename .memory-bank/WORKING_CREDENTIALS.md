@@ -1,59 +1,30 @@
 # Working Provider Credentials
 
-This document contains the exact configurations used for successful provider connections.
-
 ## Environment Setup
 
-### Required Environment Variables
 ```bash
 # SSL Fix for CloudFlare/proxy scenarios
 ESPERANTO_SSL_VERIFY=false
 
 # API Keys
-GROQ_API_KEY=gsk_******************************hR
+GROQ_API_KEY=gsk_******************************
 CEREBRAS_API_KEY=cs_******************************
+CEREBRAS_ENDPOINT=https://api.cerebras.ai/v1
 ```
 
-## Working Configuration: Groq
+## Groq (Native Provider)
 
-### Credential Details
+### Configuration
 ```json
 {
-  "name": "Cerebras by Sunshine",
+  "name": "Groq",
   "provider": "groq",
   "modalities": ["language"],
-  "api_key": "gsk_******************************hR",
-  "base_url": null,
-  "endpoint": null,
-  "api_version": null,
-  "endpoint_llm": null,
-  "endpoint_embedding": null,
-  "endpoint_stt": null,
-  "endpoint_tts": null,
-  "project": null,
-  "location": null,
-  "credentials_path": null,
-  "num_ctx": null
+  "api_key": "gsk_******************************"
 }
 ```
 
-### Connection Test
-```bash
-# Create credential
-curl -X POST http://localhost:5055/api/credentials \
-  -H "Content-Type: application/json" \
-  -d '{
-    "name": "Cerebras by Sunshine",
-    "provider": "groq",
-    "modalities": ["language"],
-    "api_key": "gsk_******************************hR"
-  }'
-
-# Test connection
-curl -X POST http://localhost:5055/api/credentials/{credential_id}/test
-```
-
-### Expected Response
+### Test Result
 ```json
 {
   "provider": "groq",
@@ -63,88 +34,53 @@ curl -X POST http://localhost:5055/api/credentials/{credential_id}/test
 ```
 
 ### Status
-✅ **WORKING** - Connection successful, models discovered
+WORKING
 
 ---
 
-## Under Investigation: Cerebras
+## Cerebras (OpenAI-Compatible)
 
-### Attempted Configuration
+### Configuration
 ```json
 {
-  "name": "Cerebras",
+  "name": "Cerebras by Sunshine",
   "provider": "openai_compatible",
   "modalities": ["language"],
   "api_key": "cs_******************************",
-  "base_url": "https://api.cerebras.ai",
-  "endpoint": null
+  "base_url": "https://api.cerebras.ai/v1"
 }
 ```
 
-### Connection Test Result
+### Test Result
 ```json
 {
   "provider": "openai_compatible",
-  "success": false,
-  "message": "Server returned status 404"
+  "success": true,
+  "message": "Connected. 3 models available: gpt-oss-120b, zai-glm-4.7, gemma-4-31b"
 }
 ```
 
-### Issue Analysis
-- The code attempts to call `{base_url}/models` endpoint
-- With `base_url: "https://api.cerebras.ai"`, it tries `https://api.cerebras.ai/models` → **404**
-- Direct API call to `https://api.cerebras.ai/v1/models` → **Works**
+### Status
+WORKING - 3 models discovered
 
-### Possible Solutions
-1. Try `base_url: "https://api.cerebras.ai/v1"` (includes /v1 in base)
-2. Custom endpoint configuration for Cerebras
-3. Custom provider implementation
-
-### Next Steps
-- [ ] Test with base_url `https://api.cerebras.ai/v1`
-- [ ] Check Cerebras API documentation for correct endpoint structure
-- [ ] Verify if Cerebras supports OpenAI-compatible /models endpoint
-
----
-
-## SSL Fix Requirements
-
-### Files Modified
-All 4 files must have `_get_ssl_verify_setting()` function:
-1. `open_notebook/ai/connection_tester.py`
-2. `api/credentials_service.py`
-3. `open_notebook/ai/model_discovery.py`
-4. `open_notebook/utils/version_utils.py`
-
-### Docker Configuration
-```yaml
-# docker-compose.sslfix.yml
-services:
-  open_notebook:
-    environment:
-      - ESPERANTO_SSL_VERIFY=false
-```
-
-### Dockerfile Fixes
-```dockerfile
-RUN npm cache clean --force || true
-RUN npm config set strict-ssl false
-```
+### Key Finding
+Base URL must include /v1 path:
+- Correct: https://api.cerebras.ai/v1
+- Incorrect: https://api.cerebras.ai (returns 404)
 
 ---
 
 ## Verification Commands
 
-### Check Container Health
+### Health Check
 ```bash
 curl http://localhost:5055/health
 # Expected: {"status": "healthy"}
 ```
 
-### Check Environment Variable
+### Test Credential
 ```bash
-docker-compose -f docker-compose.sslfix.yml exec open_notebook env | grep ESPERANTO_SSL_VERIFY
-# Expected: ESPERANTO_SSL_VERIFY=false
+curl -X POST http://localhost:5055/api/credentials/{id}/test
 ```
 
 ### List Credentials
@@ -152,18 +88,13 @@ docker-compose -f docker-compose.sslfix.yml exec open_notebook env | grep ESPERA
 curl http://localhost:5055/api/credentials
 ```
 
-### Test Specific Credential
-```bash
-curl -X POST http://localhost:5055/api/credentials/{credential_id}/test
-```
-
 ---
 
 ## Summary
 
-| Provider | Status | Configuration | Notes |
-|----------|--------|---------------|-------|
-| Groq | ✅ Working | provider: groq, no base_url | Connection successful |
-| Cerebras | ⚠️ Investigation | provider: openai_compatible, base_url: https://api.cerebras.ai | 404 on /models endpoint |
+| Provider | Status | Configuration | Models |
+|----------|--------|---------------|--------|
+| Groq | Working | provider: groq | Multiple |
+| Cerebras | Working | provider: openai_compatible, base_url: https://api.cerebras.ai/v1 | 3 models |
 
-**Key Success Factor**: SSL fix (`ESPERANTO_SSL_VERIFY=false`) is required for CloudFlare/proxy scenarios.
+**Key Success Factor**: ESPERANTO_SSL_VERIFY=false required for CloudFlare/proxy scenarios.
