@@ -34,10 +34,10 @@
 ### Quick Start
 ```bash
 # Start all services
-docker compose up -d
+docker-compose -f docker-compose.sslfix.yml up -d
 
 # View logs
-docker compose logs -f
+docker-compose -f docker-compose.sslfix.yml logs -f
 
 # Access UI
 http://localhost:8502
@@ -46,50 +46,16 @@ http://localhost:8502
 http://localhost:5055/docs
 ```
 
-### Local Development
-```bash
-# Backend
-cd code/open-notebook
-uv run uvicorn api.main:app --port 5055
-
-# Frontend
-cd frontend
-npm run dev
-
-# Worker
-make worker-start
-```
-
-## Technical Constraints
-1. **Async-first**: All DB queries and AI calls must be async
-2. **No connection pooling**: Each DB call opens/closes connection
-3. **Single-threaded graph nodes**: Sync nodes use ThreadPool for async calls
-4. **Upload limit**: 100MB default (configurable via `OPEN_NOTEBOOK_MAX_UPLOAD_SIZE_MB`)
-5. **Chunk size**: 400 tokens default (configurable)
-
-## Dependencies
-- `esperanto>=2.25.1,<3` - AI provider SDK
-- `surrealdb>=1.0.4` - Database client
-- `surreal-commands>=1.3.1,<2` - Background job system
-- `podcast-creator>=0.12.0,<1` - Podcast generation
-- `langchain-*` - AI orchestration providers
-- `httpx[socks]>=0.27.0` - HTTP client
-
 ## SSL Fix Implementation (2026-08-07)
 
 ### Problem
-When behind CloudFlare or other SSL inspection proxies, connection tests to AI providers (Groq, etc.) fail with "Connection error" even when `ESPERANTO_SSL_VERIFY=false` is set.
+When behind CloudFlare or other SSL inspection proxies, connection tests to AI providers fail even with `ESPERANTO_SSL_VERIFY=false` set.
 
 ### Root Cause
-The `ESPERANTO_SSL_VERIFY` environment variable is only read by the Esperanto library's internal HTTP client. Direct `httpx.AsyncClient` calls in the application code were not respecting this setting.
+The `ESPERANTO_SSL_VERIFY` environment variable is only read by Esperanto library's internal HTTP client. Direct `httpx.AsyncClient` calls in application code were not respecting this setting.
 
 ### Solution
-Added `_get_ssl_verify_setting()` helper function to read the environment variable and applied it to all 19 `httpx.AsyncClient` instantiations across 4 files:
-
-1. `open_notebook/ai/connection_tester.py` (4 locations)
-2. `api/credentials_service.py` (7 locations)
-3. `open_notebook/ai/model_discovery.py` (7 locations)
-4. `open_notebook/utils/version_utils.py` (1 location)
+Added `_get_ssl_verify_setting()` helper function and applied to all 19 `httpx.AsyncClient` instantiations across 4 files.
 
 ### Function Implementation
 ```python
@@ -103,7 +69,7 @@ def _get_ssl_verify_setting() -> bool:
     return setting not in ("false", "0", "no", "off")
 ```
 
-### Usage in httpx Calls
+### Usage Pattern
 ```python
 async with httpx.AsyncClient(
     timeout=10.0,
@@ -112,32 +78,89 @@ async with httpx.AsyncClient(
     response = await client.get(url, headers=headers)
 ```
 
-## Docker Build Resolution (2026-08-07)
+## Docker Build Resolution
 
 ### Problem
-Frontend build consistently failed on `npm ci` with "Exit handler never called!" error. This is a known npm bug that persisted through all 5 retry attempts.
+Frontend build failed on `npm ci` with "Exit handler never called!" error (known npm bug).
 
 ### Solution
-Two lines added to Dockerfile in the `frontend-builder` stage:
-
+Added to Dockerfile in `frontend-builder` stage:
 ```dockerfile
-# Clear cache first to avoid "Exit handler never called!" npm bug
 RUN npm cache clean --force || true
 RUN npm config set strict-ssl false
 ```
 
-### Why It Works
-1. `npm cache clean --force` - Clears corrupted npm cache that causes exit handler issues
-2. `npm config set strict-ssl false` - Disables strict SSL verification for npm registry (matching CloudFlare/proxy scenario)
-
 ### Result
-✅ Docker build completes successfully (all 37 steps)
+✅ Docker build completes successfully (37 steps)
 ✅ Image tagged as `open-notebook:sslfix`
-✅ Groq connection test passes with `ESPERANTO_SSL_VERIFY=false`
+
+## Working Provider Configurations
+
+### Groq (Tested & Working)
+**Environment Variable**: `GROQ_API_KEY=gsk_******************************hR`
+
+**Credential Configuration**:
+```json
+{
+  "name": "Cerebras by Sunshine",
+  "provider": "groq",
+  "modalities": ["language"],
+  "api_key": "gsk_******************************hR",
+  "base_url": null,
+  "endpoint": null
+}
+```
+
+**Test Command**:
+```bash
+curl -X POST http://localhost:5055/api/credentials/{id}/test
+```
+
+**Expected Response**:
+```json
+{
+  "provider": "groq",
+  "success": true,
+  "message": "Connected. X models available: ..."
+}
+```
+
+### Cerebras (Under Investigation)
+**Environment Variable**: `CEREBRAS_API_KEY=cs_******************************`
+
+**Attempted Configuration**:
+```json
+{
+  "name": "Cerebras",
+  "provider": "openai_compatible",
+  "modalities": ["language"],
+  "api_key": "cs_******************************",
+  "base_url": "https://api.cerebras.ai"
+}
+```
+
+**Issue**: `/models` endpoint returns 404
+**Direct API Test**: `curl https://api.cerebras.ai/v1/models` works
+**Possible Fix**: Try base_url `https://api.cerebras.ai/v1`
 
 ## Environment Variables
-- `OPEN_NOTEBOOK_ENCRYPTION_KEY` - Required for credential encryption
-- `ESPERANTO_SSL_VERIFY` - SSL verification (default: true)
-- `SURREAL_URL` - Database connection string
-- `CORS_ORIGINS` - Allowed CORS origins
-- `OPEN_NOTEBOOK_MAX_UPLOAD_SIZE_MB` - Upload size limit (default: 100)
+
+### Required
+- `OPEN_NOTEBOOK_ENCRYPTION_KEY` - Credential encryption secret
+- `SURREAL_URL` - Database connection (ws://surrealdb:8000/rpc)
+- `SURREAL_USER` - Database username (default: root)
+- `SURREAL_PASSWORD` - Database password (default: root)
+
+### Optional
+- `ESPERANTO_SSL_VERIFY` - SSL verification (default: true, set false for CloudFlare)
+- `GROQ_API_KEY` - Groq API key
+- `CEREBRAS_API_KEY` - Cerebras API key
+- `CORS_ORIGINS` - Allowed CORS origins (default: *)
+- `OPEN_NOTEBOOK_MAX_UPLOAD_SIZE_MB` - Upload limit (default: 100)
+
+## Technical Constraints
+1. **Async-first**: All DB queries and AI calls must be async
+2. **No connection pooling**: Each DB call opens/closes connection
+3. **Single-threaded graph nodes**: Sync nodes use ThreadPool for async calls
+4. **Upload limit**: 100MB default (configurable)
+5. **Chunk size**: 400 tokens default (configurable)

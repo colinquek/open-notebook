@@ -43,3 +43,5 @@ Or all at once: `make start-all` (status: `make status`, stop: `make stop-all`).
 | Decision log (ADRs/PDRs) | [docs/7-DEVELOPMENT/decisions/](docs/7-DEVELOPMENT/decisions/) |
 | Contribution process (Discussions → Issues → PRs) | [docs/7-DEVELOPMENT/contributing.md](docs/7-DEVELOPMENT/contributing.md) |
 | User/operator docs (install, configure, troubleshoot) | [docs/](docs/index.md) |
+
+read ~/.agents/AGENTS.MD file as well

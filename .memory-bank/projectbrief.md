@@ -12,7 +12,7 @@ Open Notebook is an open-source, privacy-focused alternative to Google's Noteboo
 - Self-hosted with SurrealDB backend
 
 ## Technical Stack
-- **Frontend**: Next.js (port 3000)
+- **Frontend**: Next.js (port 8502)
 - **Backend**: FastAPI/Python (port 5055)
 - **Database**: SurrealDB (port 8000)
 - **Worker**: surreal-commands for async jobs
@@ -26,12 +26,12 @@ Open Notebook is an open-source, privacy-focused alternative to Google's Noteboo
 ## Current Focus
 - SSL verification fix for CloudFlare SSL inspection scenarios
 - Docker build optimization
-- Credential management and model discovery
+- Multi-provider connectivity (Groq working, Cerebras investigation)
 
-## Files Changed for SSL Fix (2026-08-07)
+## SSL Fix Implementation (2026-08-07)
 
-### Phase 1: Python Code Changes (Already in sslfix branch)
-The following files were modified to support `ESPERANTO_SSL_VERIFY` environment variable:
+### Phase 1: Python Code Changes
+Modified 4 files to support `ESPERANTO_SSL_VERIFY` environment variable:
 
 1. `open_notebook/ai/connection_tester.py` - Added `_get_ssl_verify_setting()` function
 2. `api/credentials_service.py` - Added `_get_ssl_verify_setting()` function
@@ -40,9 +40,7 @@ The following files were modified to support `ESPERANTO_SSL_VERIFY` environment 
 
 All `httpx.AsyncClient` instantiations (19 total) now pass `verify=_get_ssl_verify_setting()` parameter.
 
-### Phase 2: Docker Build Fixes (2026-08-07 Session 2)
-After reclone, Docker build issues were resolved:
-
+### Phase 2: Docker Build Fixes
 1. **Dockerfile** - Added npm cache clean and SSL disable:
    - `RUN npm cache clean --force || true`
    - `RUN npm config set strict-ssl false`
@@ -51,7 +49,38 @@ After reclone, Docker build issues were resolved:
    - Changed from remote image to local build
    - Added `ESPERANTO_SSL_VERIFY=false` environment variable
 
+## Working Provider Configurations
+
+### Groq (Working)
+```json
+{
+  "name": "Cerebras by Sunshine",
+  "provider": "groq",
+  "modalities": ["language"],
+  "api_key": "gsk_******************************hR",
+  "base_url": null,
+  "endpoint": null
+}
+```
+**Status**: ✅ Connection successful
+**Test**: `POST /api/credentials/{id}/test` returns `{"success": true, "message": "Connected..."}`
+
+### Cerebras (Investigation)
+```json
+{
+  "name": "Cerebras",
+  "provider": "openai_compatible",
+  "modalities": ["language"],
+  "api_key": "cs_******************************",
+  "base_url": "https://api.cerebras.ai"
+}
+```
+**Status**: ❌ Returns 404 on `/models` endpoint
+**Issue**: Cerebras API doesn't expose `/models` endpoint at expected path
+**Workaround**: Direct API calls to `https://api.cerebras.ai/v1/models` work
+
 ## Test Results
 ✅ Groq connection test successful with `ESPERANTO_SSL_VERIFY=false`
 ✅ No SSL errors in container logs
 ✅ Docker build completes successfully
+✅ Health check: healthy
