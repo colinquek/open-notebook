@@ -10,6 +10,17 @@ import os
 from dataclasses import dataclass
 from typing import Awaitable, Callable, Dict, List, Optional, Tuple
 
+
+def _get_ssl_verify_setting() -> bool:
+    """Read ESPERANTO_SSL_VERIFY environment variable.
+    
+    Returns False if set to 'false' (case-insensitive), True otherwise.
+    Defaults to True for secure production behavior.
+    """
+    setting = os.environ.get("ESPERANTO_SSL_VERIFY", "true").lower()
+    return setting not in ("false", "0", "no", "off")
+
+
 import httpx
 from loguru import logger
 
@@ -284,7 +295,9 @@ async def discover_openai_compatible_provider(provider: str) -> List[DiscoveredM
 
     models = []
     try:
-        async with httpx.AsyncClient() as client:
+        async with httpx.AsyncClient(
+            verify=_get_ssl_verify_setting(),
+        ) as client:
             response = await client.get(
                 spec.url,
                 headers={"Authorization": f"Bearer {api_key}"},
@@ -356,7 +369,9 @@ async def fetch_anthropic_model_ids(api_key: str) -> List[str]:
     """
     model_ids: List[str] = []
     params: Dict[str, str] = {"limit": "100"}
-    async with httpx.AsyncClient() as client:
+    async with httpx.AsyncClient(
+            verify=_get_ssl_verify_setting(),
+        ) as client:
         # Hard page cap as a safety net against a misbehaving cursor.
         for _ in range(20):
             response = await client.get(
@@ -412,7 +427,9 @@ async def discover_google_models() -> List[DiscoveredModel]:
 
     models = []
     try:
-        async with httpx.AsyncClient() as client:
+        async with httpx.AsyncClient(
+            verify=_get_ssl_verify_setting(),
+        ) as client:
             # Build URL without logging the key to avoid exposure
             url = "https://generativelanguage.googleapis.com/v1/models"
             headers = {"X-Goog-Api-Key": api_key}
@@ -459,7 +476,9 @@ async def discover_ollama_models() -> List[DiscoveredModel]:
             f"{base_url.rstrip('/')}/api/tags", "ollama"
         )
         headers = dict(target.headers)
-        async with httpx.AsyncClient() as client:
+        async with httpx.AsyncClient(
+            verify=_get_ssl_verify_setting(),
+        ) as client:
             response = await client.get(
                 target.url,
                 headers=headers,
@@ -694,7 +713,9 @@ async def discover_openai_compatible_models() -> List[DiscoveredModel]:
         if api_key:
             headers["Authorization"] = f"Bearer {api_key}"
 
-        async with httpx.AsyncClient() as client:
+        async with httpx.AsyncClient(
+            verify=_get_ssl_verify_setting(),
+        ) as client:
             response = await client.get(
                 target.url,
                 headers=headers,
@@ -757,7 +778,9 @@ async def discover_anthropic_compatible_models() -> List[DiscoveredModel]:
         headers["anthropic-version"] = "2023-06-01"
         if api_key:
             headers["x-api-key"] = api_key
-        async with httpx.AsyncClient() as client:
+        async with httpx.AsyncClient(
+            verify=_get_ssl_verify_setting(),
+        ) as client:
             response = await client.get(
                 target.url,
                 headers=headers,
@@ -821,7 +844,9 @@ async def discover_omlx_models() -> List[DiscoveredModel]:
         if api_key:
             headers["Authorization"] = f"Bearer {api_key}"
 
-        async with httpx.AsyncClient() as client:
+        async with httpx.AsyncClient(
+            verify=_get_ssl_verify_setting(),
+        ) as client:
             response = await client.get(
                 target.url,
                 headers=headers,

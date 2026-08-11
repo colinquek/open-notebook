@@ -4,6 +4,18 @@ Handles version comparison, GitHub version fetching, and package version managem
 """
 
 from importlib.metadata import PackageNotFoundError, version
+import os
+
+
+def _get_ssl_verify_setting() -> bool:
+    """Read ESPERANTO_SSL_VERIFY environment variable.
+    
+    Returns False if set to 'false' (case-insensitive), True otherwise.
+    Defaults to True for secure production behavior.
+    """
+    setting = os.environ.get("ESPERANTO_SSL_VERIFY", "true").lower()
+    return setting not in ("false", "0", "no", "off")
+
 from urllib.parse import urlparse
 
 import requests  # type: ignore
@@ -36,7 +48,10 @@ async def get_version_from_github_async(repo_url: str, branch: str = "main") -> 
     raw_url = f"https://raw.githubusercontent.com/{owner}/{repo}/{branch}/pyproject.toml"
 
     # Fetch the file with timeout using httpx
-    async with httpx.AsyncClient(timeout=10.0) as client:
+    async with httpx.AsyncClient(
+        timeout=10.0,
+        verify=_get_ssl_verify_setting(),
+    ) as client:
         response = await client.get(raw_url)
         response.raise_for_status()
 

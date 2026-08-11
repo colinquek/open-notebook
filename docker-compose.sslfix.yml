@@ -24,7 +24,6 @@ services:
     pull_policy: always
 
   open_notebook:
-    image: open-notebook:sslfix
     build:
       context: .
       target: runtime
